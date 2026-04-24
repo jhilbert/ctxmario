@@ -1,0 +1,242 @@
+:root {
+  color-scheme: light;
+  font-family: "Arial Black", Inter, system-ui, sans-serif;
+  background: #071423;
+  color: #fffdf3;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  overflow: hidden;
+  background: #071423;
+}
+
+body {
+  min-height: 100vh;
+}
+
+button {
+  font: inherit;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 14px;
+  padding: max(14px, env(safe-area-inset-top)) max(14px, 2vw)
+    max(14px, env(safe-area-inset-bottom));
+  touch-action: none;
+}
+
+.hud {
+  display: grid;
+  grid-template-columns: minmax(190px, 1.2fr) repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+  text-transform: uppercase;
+  text-shadow:
+    0 3px 0 #0d214e,
+    0 6px 12px rgba(0, 0, 0, 0.25);
+}
+
+.hud-group {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.hud-group:nth-child(n + 2) {
+  justify-items: center;
+}
+
+.hud-group:last-child {
+  justify-items: end;
+}
+
+.hud-label {
+  font-size: clamp(0.8rem, 1.2vw, 1.3rem);
+  letter-spacing: 0;
+}
+
+.hud-value {
+  font-size: clamp(1.5rem, 2vw, 2.7rem);
+  line-height: 1;
+}
+
+.hud-digits {
+  font-variant-numeric: tabular-nums;
+}
+
+.hero-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.hero-avatar {
+  width: clamp(44px, 4.2vw, 58px);
+  aspect-ratio: 1;
+  border-radius: 6px;
+  border: 3px solid #fffdf3;
+  background:
+    radial-gradient(circle at 55% 40%, #ffd8b0 0 16%, transparent 17%),
+    radial-gradient(circle at 68% 42%, #ffd8b0 0 13%, transparent 14%),
+    radial-gradient(circle at 62% 34%, #1d3357 0 22%, transparent 23%),
+    linear-gradient(180deg, #1f65ff 0 36%, #0f4fd0 36% 62%, #f3b637 62% 75%, #1f65ff 75%);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+}
+
+.hearts {
+  display: flex;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.heart {
+  width: clamp(18px, 2vw, 28px);
+  aspect-ratio: 1;
+  background: #4f5a75;
+  clip-path: path("M16 28C16 28 0 18.2 0 8.6C0 3.8 3.9 0 8.7 0C11.9 0 14.6 1.8 16 4.5C17.4 1.8 20.1 0 23.3 0C28.1 0 32 3.8 32 8.6C32 18.2 16 28 16 28Z");
+  transform: scale(0.9);
+}
+
+.heart.is-on {
+  background: linear-gradient(180deg, #ff7b92, #e63153);
+  filter: drop-shadow(0 0 10px rgba(255, 87, 126, 0.35));
+}
+
+.game-stage {
+  position: relative;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+#game {
+  flex: 1;
+  min-height: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.4),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+#game canvas {
+  display: block;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(7, 20, 35, 0.58);
+  backdrop-filter: blur(6px);
+}
+
+.overlay.hidden {
+  display: none;
+}
+
+.overlay-panel {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 22px 26px 24px;
+  border-radius: 8px;
+  background: rgba(10, 31, 58, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.32);
+  text-align: center;
+}
+
+.overlay-kicker,
+.overlay-title,
+.overlay-copy {
+  margin: 0;
+}
+
+.overlay-kicker {
+  color: #fdd13a;
+  font-size: 0.9rem;
+}
+
+.overlay-title {
+  font-size: clamp(2rem, 4vw, 3.8rem);
+  line-height: 0.95;
+}
+
+.overlay-copy {
+  font-size: clamp(1rem, 1.35vw, 1.25rem);
+  max-width: 26ch;
+}
+
+.overlay-button,
+.touch-button {
+  display: inline-grid;
+  place-items: center;
+  width: clamp(56px, 7vw, 74px);
+  aspect-ratio: 1;
+  border: 0;
+  border-radius: 8px;
+  color: #fffdf3;
+  background:
+    linear-gradient(180deg, rgba(255, 210, 58, 0.96), rgba(227, 140, 24, 0.96));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    0 10px 24px rgba(0, 0, 0, 0.28);
+  font-size: clamp(1.6rem, 2vw, 2.2rem);
+  cursor: pointer;
+  user-select: none;
+}
+
+.overlay-button:active,
+.touch-button:active,
+.touch-button.is-active {
+  transform: translateY(2px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 6px 14px rgba(0, 0, 0, 0.25);
+}
+
+.touch-controls {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+}
+
+@media (max-width: 900px) {
+  .app-shell {
+    gap: 10px;
+    padding-inline: 10px;
+  }
+
+  .hud {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px 14px;
+  }
+
+  .hud-group:nth-child(n + 2) {
+    justify-items: start;
+  }
+
+  .touch-controls {
+    justify-content: space-between;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .touch-controls {
+    justify-content: center;
+  }
+}

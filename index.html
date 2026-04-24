@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <title>CONTAINEX Jump</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="hud" aria-label="Game status">
+        <section class="hud-group">
+          <span class="hud-label">Hero</span>
+          <div class="hero-status">
+            <span class="hero-avatar" aria-hidden="true"></span>
+            <span class="hud-value" id="lives">x03</span>
+            <div class="hearts" id="hearts" aria-label="Health">
+              <span class="heart is-on"></span>
+              <span class="heart is-on"></span>
+              <span class="heart is-on"></span>
+            </div>
+          </div>
+        </section>
+        <section class="hud-group">
+          <span class="hud-label">Score</span>
+          <span class="hud-value hud-digits" id="score">000000</span>
+        </section>
+        <section class="hud-group">
+          <span class="hud-label">Hi Score</span>
+          <span class="hud-value hud-digits" id="highScore">000000</span>
+        </section>
+        <section class="hud-group">
+          <span class="hud-label">Level</span>
+          <span class="hud-value hud-digits" id="level">1</span>
+        </section>
+        <section class="hud-group">
+          <span class="hud-label">Time</span>
+          <span class="hud-value hud-digits" id="time">299</span>
+        </section>
+      </header>
+
+      <section class="game-stage" aria-label="Containex platformer">
+        <div id="game"></div>
+        <div class="overlay hidden" id="overlay" aria-live="polite">
+          <div class="overlay-panel">
+            <p class="overlay-kicker" id="overlayKicker">CONTAINEX Jump</p>
+            <h1 class="overlay-title" id="overlayTitle">Course Clear</h1>
+            <p class="overlay-copy" id="overlayCopy">
+              The star is yours.
+            </p>
+            <button class="overlay-button" id="restartButton" type="button">
+              ↻
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <nav class="touch-controls" aria-label="Touch controls">
+        <button
+          class="touch-button"
+          id="moveLeft"
+          type="button"
+          aria-label="Move left"
+          title="Move left"
+        >
+          ←
+        </button>
+        <button
+          class="touch-button"
+          id="jump"
+          type="button"
+          aria-label="Jump"
+          title="Jump"
+        >
+          ↑
+        </button>
+        <button
+          class="touch-button"
+          id="moveRight"
+          type="button"
+          aria-label="Move right"
+          title="Move right"
+        >
+          →
+        </button>
+      </nav>
+    </main>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
