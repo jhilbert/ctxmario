@@ -7,6 +7,9 @@ const FLOOR_Y = 760;
 const PLAYER_RUN_SPEED = 300;
 const PLAYER_JUMP_SPEED = -860;
 const PLAYER_SHORT_HOP_SPEED = -360;
+const PLAYER_JUMP_BUFFER_MS = 140;
+const TOUCH_JUMP_BUFFER_MS = 190;
+const PLAYER_COYOTE_MS = 125;
 const PLAYER_JUMP_HOLD_MS = 120;
 const PLAYER_JUMP_HOLD_FORCE = 26;
 const PLAYER_BODY_HEIGHT = 46;
@@ -38,6 +41,7 @@ const levelNode = document.getElementById("level");
 const timeNode = document.getElementById("time");
 const livesNode = document.getElementById("lives");
 const heartsNode = document.getElementById("hearts");
+const fullscreenButton = document.getElementById("fullscreenButton");
 
 const runState = {
   score: 0,
@@ -58,6 +62,7 @@ let activeScene = null;
 bindTouchButton("moveLeft", "left");
 bindTouchButton("moveRight", "right");
 bindTouchButton("jump", "jump", true);
+bindFullscreenButton();
 
 restartButton.addEventListener("click", () => {
   hideOverlay();
@@ -82,6 +87,7 @@ function bindTouchButton(id, key, queue = false) {
 
   const activate = (event) => {
     event.preventDefault();
+    button.setPointerCapture?.(event.pointerId);
     touchState[key] = true;
     if (queue) {
       touchState.jumpQueued = true;
@@ -91,6 +97,9 @@ function bindTouchButton(id, key, queue = false) {
 
   const deactivate = (event) => {
     event.preventDefault();
+    if (button.hasPointerCapture?.(event.pointerId)) {
+      button.releasePointerCapture(event.pointerId);
+    }
     touchState[key] = false;
     button.classList.remove("is-active");
   };
@@ -98,13 +107,42 @@ function bindTouchButton(id, key, queue = false) {
   [
     ["pointerdown", activate],
     ["pointerup", deactivate],
-    ["pointerleave", deactivate],
     ["pointercancel", deactivate],
-    ["touchstart", activate],
-    ["touchend", deactivate],
-    ["touchcancel", deactivate],
   ].forEach(([name, handler]) => {
     button.addEventListener(name, handler, { passive: false });
+  });
+}
+
+function bindFullscreenButton() {
+  if (!fullscreenButton) {
+    return;
+  }
+
+  const toggleFullscreen = async () => {
+    const shell = document.querySelector(".app-shell");
+    if (!shell || !document.fullscreenEnabled) {
+      document.body.classList.toggle("is-mobile-fullscreen");
+      return;
+    }
+
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else {
+        await shell.requestFullscreen({ navigationUI: "hide" });
+      }
+    } catch {
+      document.body.classList.toggle("is-mobile-fullscreen");
+    }
+  };
+
+  fullscreenButton.addEventListener("pointerup", (event) => {
+    event.preventDefault();
+    toggleFullscreen();
+  });
+
+  fullscreenButton.addEventListener("click", (event) => {
+    event.preventDefault();
   });
 }
 
@@ -910,6 +948,7 @@ class ContainexJumpScene extends Phaser.Scene {
 
   updatePlayer(delta) {
     const onGround = this.player.body.blocked.down || this.player.body.touching.down;
+    const touchJumpQueued = touchState.jumpQueued;
     const leftDown =
       this.cursors.left.isDown || this.keys.leftA.isDown || touchState.left;
     const rightDown =
@@ -923,18 +962,18 @@ class ContainexJumpScene extends Phaser.Scene {
       Phaser.Input.Keyboard.JustDown(this.cursors.space) ||
       Phaser.Input.Keyboard.JustDown(this.cursors.up) ||
       Phaser.Input.Keyboard.JustDown(this.keys.jumpW) ||
-      touchState.jumpQueued;
+      touchJumpQueued;
 
     touchState.jumpQueued = false;
 
     if (jumpPressed) {
-      this.jumpBuffer = 130;
+      this.jumpBuffer = touchJumpQueued ? TOUCH_JUMP_BUFFER_MS : PLAYER_JUMP_BUFFER_MS;
     } else {
       this.jumpBuffer = Math.max(0, this.jumpBuffer - delta);
     }
 
     if (onGround) {
-      this.coyoteTime = 110;
+      this.coyoteTime = PLAYER_COYOTE_MS;
       this.rememberSafePosition();
     } else {
       this.coyoteTime = Math.max(0, this.coyoteTime - delta);

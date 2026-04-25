@@ -59,33 +59,46 @@
       </section>
 
       <nav class="touch-controls" aria-label="Touch controls">
-        <button
-          class="touch-button"
-          id="moveLeft"
-          type="button"
-          aria-label="Move left"
-          title="Move left"
-        >
-          ←
-        </button>
-        <button
-          class="touch-button"
-          id="jump"
-          type="button"
-          aria-label="Jump"
-          title="Jump"
-        >
-          ↑
-        </button>
-        <button
-          class="touch-button"
-          id="moveRight"
-          type="button"
-          aria-label="Move right"
-          title="Move right"
-        >
-          →
-        </button>
+        <div class="touch-cluster">
+          <button
+            class="touch-button"
+            id="moveLeft"
+            type="button"
+            aria-label="Move left"
+            title="Move left"
+          >
+            ←
+          </button>
+          <button
+            class="touch-button"
+            id="moveRight"
+            type="button"
+            aria-label="Move right"
+            title="Move right"
+          >
+            →
+          </button>
+        </div>
+        <div class="touch-cluster touch-cluster-actions">
+          <button
+            class="touch-button touch-button-secondary"
+            id="fullscreenButton"
+            type="button"
+            aria-label="Toggle fullscreen"
+            title="Toggle fullscreen"
+          >
+            ⛶
+          </button>
+          <button
+            class="touch-button touch-button-jump"
+            id="jump"
+            type="button"
+            aria-label="Jump"
+            title="Jump"
+          >
+            ↑
+          </button>
+        </div>
       </nav>
     </main>
 
