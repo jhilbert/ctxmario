@@ -42,6 +42,7 @@ const timeNode = document.getElementById("time");
 const livesNode = document.getElementById("lives");
 const heartsNode = document.getElementById("hearts");
 const fullscreenButton = document.getElementById("fullscreenButton");
+const appShell = document.querySelector(".app-shell");
 
 const runState = {
   score: 0,
@@ -58,7 +59,11 @@ const touchState = {
 };
 
 let activeScene = null;
+let immersiveMode = false;
 
+bindViewportHeight();
+bindGameSurfaceGuards();
+bindTouchResetGuards();
 bindTouchButton("moveLeft", "left");
 bindTouchButton("moveRight", "right");
 bindTouchButton("jump", "jump", true);
@@ -108,8 +113,50 @@ function bindTouchButton(id, key, queue = false) {
     ["pointerdown", activate],
     ["pointerup", deactivate],
     ["pointercancel", deactivate],
+    ["lostpointercapture", deactivate],
   ].forEach(([name, handler]) => {
     button.addEventListener(name, handler, { passive: false });
+  });
+}
+
+function bindViewportHeight() {
+  const syncViewportHeight = () => {
+    const height = window.visualViewport?.height ?? window.innerHeight;
+    document.documentElement.style.setProperty("--app-height", `${height}px`);
+  };
+
+  syncViewportHeight();
+  window.addEventListener("resize", syncViewportHeight);
+  window.visualViewport?.addEventListener("resize", syncViewportHeight);
+}
+
+function bindGameSurfaceGuards() {
+  if (!appShell) {
+    return;
+  }
+
+  ["contextmenu", "dragstart", "selectstart", "gesturestart", "gesturechange", "gestureend"].forEach((eventName) => {
+    appShell.addEventListener(eventName, (event) => event.preventDefault());
+  });
+
+  appShell.addEventListener("touchmove", (event) => event.preventDefault(), { passive: false });
+}
+
+function resetTouchControls() {
+  touchState.left = false;
+  touchState.right = false;
+  touchState.jump = false;
+  document.querySelectorAll(".touch-button.is-active").forEach((button) => {
+    button.classList.remove("is-active");
+  });
+}
+
+function bindTouchResetGuards() {
+  window.addEventListener("blur", resetTouchControls);
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      resetTouchControls();
+    }
   });
 }
 
@@ -118,32 +165,73 @@ function bindFullscreenButton() {
     return;
   }
 
-  const toggleFullscreen = async () => {
-    const shell = document.querySelector(".app-shell");
-    if (!shell || !document.fullscreenEnabled) {
-      document.body.classList.toggle("is-mobile-fullscreen");
-      return;
+  const getFullscreenElement = () =>
+    document.fullscreenElement ||
+    document.webkitFullscreenElement ||
+    null;
+  const requestNativeFullscreen = () => {
+    if (appShell?.requestFullscreen) {
+      return appShell.requestFullscreen({ navigationUI: "hide" });
     }
-
-    try {
-      if (document.fullscreenElement) {
-        await document.exitFullscreen();
-      } else {
-        await shell.requestFullscreen({ navigationUI: "hide" });
-      }
-    } catch {
-      document.body.classList.toggle("is-mobile-fullscreen");
-    }
+    const legacyRequest =
+      appShell?.webkitRequestFullscreen ||
+      appShell?.mozRequestFullScreen ||
+      appShell?.msRequestFullscreen;
+    return legacyRequest?.call(appShell);
+  };
+  const exitNativeFullscreen = () => {
+    const legacyExit =
+      document.exitFullscreen ||
+      document.webkitExitFullscreen ||
+      document.mozCancelFullScreen ||
+      document.msExitFullscreen;
+    return legacyExit?.call(document);
   };
 
-  fullscreenButton.addEventListener("pointerup", (event) => {
-    event.preventDefault();
-    toggleFullscreen();
+  const syncFullscreenState = () => {
+    const active = immersiveMode || Boolean(getFullscreenElement());
+    document.body.classList.toggle("is-mobile-fullscreen", active);
+    fullscreenButton.setAttribute("aria-pressed", String(active));
+    fullscreenButton.textContent = active ? "×" : "⛶";
+  };
+
+  const toggleFullscreen = async () => {
+    const nextActive = !(immersiveMode || getFullscreenElement());
+    immersiveMode = nextActive;
+    syncFullscreenState();
+
+    if (nextActive) {
+      try {
+        await requestNativeFullscreen();
+      } catch {
+        syncFullscreenState();
+      }
+    } else if (!nextActive && getFullscreenElement()) {
+      try {
+        await exitNativeFullscreen();
+      } catch {
+        syncFullscreenState();
+      }
+    }
+
+    syncFullscreenState();
+  };
+
+  ["fullscreenchange", "webkitfullscreenchange", "mozfullscreenchange", "MSFullscreenChange"].forEach((eventName) => {
+    document.addEventListener(eventName, () => {
+      if (!getFullscreenElement()) {
+        immersiveMode = false;
+      }
+      syncFullscreenState();
+    });
   });
 
   fullscreenButton.addEventListener("click", (event) => {
     event.preventDefault();
+    toggleFullscreen();
   });
+
+  syncFullscreenState();
 }
 
 function syncHud({ score, highScore, level, timeLeft, lives, hearts }) {

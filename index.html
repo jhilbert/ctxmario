@@ -6,6 +6,10 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
+    <meta name="theme-color" content="#071423" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>CONTAINEX Jump</title>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
@@ -44,6 +48,18 @@
 
       <section class="game-stage" aria-label="Containex platformer">
         <div id="game"></div>
+        <div class="screen-tools">
+          <button
+            class="screen-button"
+            id="fullscreenButton"
+            type="button"
+            aria-label="Toggle fullscreen"
+            aria-pressed="false"
+            title="Toggle fullscreen"
+          >
+            ⛶
+          </button>
+        </div>
         <div class="overlay hidden" id="overlay" aria-live="polite">
           <div class="overlay-panel">
             <p class="overlay-kicker" id="overlayKicker">CONTAINEX Jump</p>
@@ -59,9 +75,9 @@
       </section>
 
       <nav class="touch-controls" aria-label="Touch controls">
-        <div class="touch-cluster">
+        <div class="touch-cluster touch-cluster-move">
           <button
-            class="touch-button"
+            class="touch-button touch-button-run"
             id="moveLeft"
             type="button"
             aria-label="Move left"
@@ -70,7 +86,7 @@
             ←
           </button>
           <button
-            class="touch-button"
+            class="touch-button touch-button-run"
             id="moveRight"
             type="button"
             aria-label="Move right"
@@ -79,16 +95,7 @@
             →
           </button>
         </div>
-        <div class="touch-cluster touch-cluster-actions">
-          <button
-            class="touch-button touch-button-secondary"
-            id="fullscreenButton"
-            type="button"
-            aria-label="Toggle fullscreen"
-            title="Toggle fullscreen"
-          >
-            ⛶
-          </button>
+        <div class="touch-cluster touch-cluster-jump">
           <button
             class="touch-button touch-button-jump"
             id="jump"
