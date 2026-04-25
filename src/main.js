@@ -180,6 +180,7 @@ class ContainexJumpScene extends Phaser.Scene {
     this.createEffects();
     this.createCollisions();
     this.createTimer();
+    this.events.on(Phaser.Scenes.Events.PRE_UPDATE, this.updateMovingPlatforms, this);
     this.resetState();
   }
 
@@ -817,7 +818,6 @@ class ContainexJumpScene extends Phaser.Scene {
     }
 
     this.updateClouds(delta);
-    this.updateMovingPlatforms(time, delta);
     this.updateCollectibles(time);
     this.updateBirds(time);
     this.updateEnemies();
@@ -840,16 +840,15 @@ class ContainexJumpScene extends Phaser.Scene {
   }
 
   updateMovingPlatforms(time, delta) {
-    const velocityScale = delta > 0 ? 1000 / delta : 0;
+    if (this.isFrozen || !this.containerPlatforms) {
+      return;
+    }
 
     this.containerPlatforms.forEach((platform) => {
       const nextY = platform.baseY + Math.sin(time * platform.speed + platform.phase) * platform.range;
-      const deltaY = nextY - platform.sprite.y;
 
       platform.sprite.setY(nextY);
       platform.collider.setY(nextY);
-      platform.collider.body.setVelocity(0, deltaY * velocityScale);
-      platform.collider.body.updateFromGameObject();
     });
   }
 
@@ -1058,6 +1057,7 @@ function createMovingContainerPlatform(scene, group, { x, y, width, height, rang
   collider.setVisible(false);
   collider.body.setAllowGravity(false);
   collider.body.setImmovable(true);
+  collider.body.setDirectControl(true);
   collider.body.updateFromGameObject();
   group.add(collider);
 
