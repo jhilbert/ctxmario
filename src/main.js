@@ -19,14 +19,27 @@ const PLAYER_SPAWN_X = 120;
 const PLAYER_SPAWN_Y = FLOOR_Y - 36 - PLAYER_BODY_HEIGHT - PLAYER_BODY_OFFSET_Y + PLAYER_SPRITE_HALF_HEIGHT;
 const FALL_LIMIT_Y = GAME_HEIGHT + 210;
 const LEVEL_TIME_LIMIT = 50;
+const LEVEL_CLEAR_POINTS = 1000;
+const TIME_BONUS_MULTIPLIER = 100;
+const LEVEL_BONUS_FADE_DELAY_MS = 1700;
+const LEVEL_BANNER_AFTER_BONUS_DELAY_MS = 1600;
 const FINAL_GROUND_X = COURSE_WIDTH - 1280;
 const FINAL_GROUND_WIDTH = 1240;
 const CONTAINER_TEXTURE_KEY = "containex-container";
+const PINK_CONTAINER_TEXTURE_KEY = "containex-container-pink";
 const PLUS_LINE_GOAL_TEXTURE_KEY = "ctx-plus-line-goal";
 const HIGH_SCORE_STORAGE_KEY = "containex-jump-high-score";
+const SOUND_ENABLED_STORAGE_KEY = "containex-jump-sound-enabled";
 const CONTAINER_ASSET_WIDTH = 343;
 const CONTAINER_ASSET_HEIGHT = 258;
 const CONTAINER_ASPECT = CONTAINER_ASSET_HEIGHT / CONTAINER_ASSET_WIDTH;
+const CONTAINER_SURFACE_TOP_INSET = 7;
+const CONTAINER_SUPPORT_BODY_INSET = 14;
+const CONTAINER_SUPPORT_TOP_OFFSET = 0;
+const CONTAINER_CACTUS_SURFACE_OFFSET = 28;
+const CONTAINER_VISUAL_CONTACT_MS = 90;
+const SOUND_MASTER_GAIN = 0.14;
+const WALK_SOUND_INTERVAL_MS = 165;
 
 const assetPath = (fileName) => `${import.meta.env.BASE_URL}${fileName}`;
 
@@ -60,6 +73,7 @@ const touchState = {
 
 let activeScene = null;
 let immersiveMode = false;
+let soundEffects = null;
 
 bindViewportHeight();
 bindGameSurfaceGuards();
@@ -239,7 +253,7 @@ function syncHud({ score, highScore, level, timeLeft, lives, hearts }) {
   highScoreNode.textContent = String(highScore).padStart(6, "0");
   levelNode.textContent = String(level);
   timeNode.textContent = String(timeLeft).padStart(3, "0");
-  livesNode.textContent = `x${String(lives).padStart(2, "0")}`;
+  livesNode.textContent = "";
   heartsNode.innerHTML = "";
   for (let index = 0; index < 3; index += 1) {
     const heart = document.createElement("span");
@@ -277,6 +291,134 @@ function saveHighScore(score) {
   }
 }
 
+function loadSoundEnabled() {
+  try {
+    return window.localStorage.getItem(SOUND_ENABLED_STORAGE_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
+
+function saveSoundEnabled(enabled) {
+  try {
+    window.localStorage.setItem(SOUND_ENABLED_STORAGE_KEY, String(enabled));
+  } catch {
+    // Sound can still be toggled for this session when storage is unavailable.
+  }
+}
+
+class SoundEffects {
+  constructor() {
+    this.enabled = loadSoundEnabled();
+    this.context = null;
+    this.master = null;
+  }
+
+  toggle() {
+    this.enabled = !this.enabled;
+    saveSoundEnabled(this.enabled);
+    if (this.enabled) {
+      this.ensureContext();
+    }
+    return this.enabled;
+  }
+
+  play(name) {
+    if (!this.enabled) {
+      return;
+    }
+
+    const context = this.ensureContext();
+    if (!context) {
+      return;
+    }
+
+    if (context.state === "suspended") {
+      context.resume().catch(() => {});
+    }
+
+    const start = context.currentTime + 0.006;
+    const patterns = {
+      jump: [
+        { time: 0, duration: 0.1, frequency: 330, endFrequency: 620, type: "square", gain: 0.7 },
+      ],
+      coin: [
+        { time: 0, duration: 0.06, frequency: 760, endFrequency: 960, type: "triangle", gain: 0.7 },
+        { time: 0.055, duration: 0.08, frequency: 1020, endFrequency: 1260, type: "triangle", gain: 0.52 },
+      ],
+      walkA: [
+        { time: 0, duration: 0.045, frequency: 135, endFrequency: 95, type: "triangle", gain: 0.24 },
+      ],
+      walkB: [
+        { time: 0, duration: 0.045, frequency: 165, endFrequency: 115, type: "triangle", gain: 0.2 },
+      ],
+      star: [
+        { time: 0, duration: 0.07, frequency: 660, endFrequency: 880, type: "triangle", gain: 0.58 },
+        { time: 0.06, duration: 0.07, frequency: 880, endFrequency: 1175, type: "triangle", gain: 0.58 },
+        { time: 0.12, duration: 0.12, frequency: 1175, endFrequency: 1568, type: "triangle", gain: 0.5 },
+      ],
+      stomp: [
+        { time: 0, duration: 0.08, frequency: 190, endFrequency: 95, type: "square", gain: 0.75 },
+      ],
+      hurt: [
+        { time: 0, duration: 0.16, frequency: 260, endFrequency: 90, type: "sawtooth", gain: 0.62 },
+        { time: 0.08, duration: 0.12, frequency: 180, endFrequency: 70, type: "square", gain: 0.34 },
+      ],
+      levelClear: [
+        { time: 0, duration: 0.12, frequency: 523, endFrequency: 659, type: "triangle", gain: 0.58 },
+        { time: 0.11, duration: 0.12, frequency: 659, endFrequency: 784, type: "triangle", gain: 0.58 },
+        { time: 0.22, duration: 0.18, frequency: 784, endFrequency: 1047, type: "triangle", gain: 0.56 },
+      ],
+      next: [
+        { time: 0, duration: 0.08, frequency: 520, endFrequency: 780, type: "square", gain: 0.42 },
+      ],
+      toggle: [
+        { time: 0, duration: 0.07, frequency: 420, endFrequency: 680, type: "triangle", gain: 0.44 },
+      ],
+    };
+
+    (patterns[name] ?? patterns.coin).forEach((note) => this.playNote(context, start, note));
+  }
+
+  ensureContext() {
+    if (this.context) {
+      return this.context;
+    }
+
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) {
+      return null;
+    }
+
+    this.context = new AudioContext();
+    this.master = this.context.createGain();
+    this.master.gain.value = SOUND_MASTER_GAIN;
+    this.master.connect(this.context.destination);
+    return this.context;
+  }
+
+  playNote(context, start, { time, duration, frequency, endFrequency, type, gain }) {
+    const oscillator = context.createOscillator();
+    const envelope = context.createGain();
+    const noteStart = start + time;
+    const noteEnd = noteStart + duration;
+
+    oscillator.type = type;
+    oscillator.frequency.setValueAtTime(frequency, noteStart);
+    oscillator.frequency.exponentialRampToValueAtTime(Math.max(1, endFrequency), noteEnd);
+    envelope.gain.setValueAtTime(0.0001, noteStart);
+    envelope.gain.exponentialRampToValueAtTime(Math.max(0.0001, gain), noteStart + 0.012);
+    envelope.gain.exponentialRampToValueAtTime(0.0001, noteEnd);
+
+    oscillator.connect(envelope);
+    envelope.connect(this.master);
+    oscillator.start(noteStart);
+    oscillator.stop(noteEnd + 0.02);
+  }
+}
+
+soundEffects = new SoundEffects();
+
 function resetRunState() {
   runState.score = 0;
   runState.lives = 3;
@@ -297,6 +439,7 @@ class ContainexJumpScene extends Phaser.Scene {
     activeScene = this;
     hideOverlay();
     createTextures(this);
+    this.level = runState.level;
     this.createWorld();
     this.createPlatforms();
     this.createCollectibles();
@@ -306,8 +449,43 @@ class ContainexJumpScene extends Phaser.Scene {
     this.createEffects();
     this.createCollisions();
     this.createTimer();
+    this.bindSecretShortcuts();
     this.events.on(Phaser.Scenes.Events.PRE_UPDATE, this.updateMovingPlatforms, this);
     this.resetState();
+  }
+
+  bindSecretShortcuts() {
+    const keyboard = this.input.keyboard;
+    if (!keyboard) {
+      return;
+    }
+
+    keyboard.on("keydown-L", this.skipToNextLevel, this);
+    keyboard.on("keydown-S", this.toggleSound, this);
+    keyboard.on("keydown-ENTER", this.handleEnterKey, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      keyboard.off("keydown-L", this.skipToNextLevel, this);
+      keyboard.off("keydown-S", this.toggleSound, this);
+      keyboard.off("keydown-ENTER", this.handleEnterKey, this);
+    });
+  }
+
+  toggleSound() {
+    const enabled = soundEffects.toggle();
+    this.showFloatingScore(
+      this.cameras.main.scrollX + GAME_WIDTH / 2,
+      140,
+      enabled ? "SOUND ON" : "SOUND OFF",
+    );
+    if (enabled) {
+      soundEffects.play("toggle");
+    }
+  }
+
+  handleEnterKey() {
+    if (this.levelCompleted) {
+      this.startNextLevel();
+    }
   }
 
   createWorld() {
@@ -446,7 +624,7 @@ class ContainexJumpScene extends Phaser.Scene {
     );
     addPlatformBody(this, this.platforms, 4625, 623, 180, 72);
 
-    [
+    const containerConfigs = [
       { x: 450, y: 496, width: 320, range: 22, speed: 0.0013, phase: 0.4 },
       { x: 900, y: 395, width: 355, range: 32, speed: 0.0011, phase: 2.1 },
       { x: 1380, y: 510, width: 335, range: 26, speed: 0.0015, phase: 4.4 },
@@ -455,11 +633,18 @@ class ContainexJumpScene extends Phaser.Scene {
       { x: 3040, y: 360, width: 380, range: 28, speed: 0.001, phase: 5.1 },
       { x: 3600, y: 525, width: 350, range: 24, speed: 0.00145, phase: 2.8 },
       { x: 4140, y: 365, width: 395, range: 30, speed: 0.0009, phase: 0.9 },
-    ].forEach((container) => {
+    ];
+
+    containerConfigs.forEach((container, index) => {
+      const isSmallPinkContainer = this.level >= 3 && index % 2 === 1;
+      const width = isSmallPinkContainer ? Math.round(container.width * 0.68) : container.width;
       this.containerPlatforms.push(
         createMovingContainerPlatform(this, this.movingPlatforms, {
           ...container,
-          height: getContainerHeight(container.width),
+          x: container.x + Math.round((container.width - width) / 2),
+          width,
+          height: getContainerHeight(width),
+          textureKey: isSmallPinkContainer ? PINK_CONTAINER_TEXTURE_KEY : CONTAINER_TEXTURE_KEY,
         }),
       );
     });
@@ -533,6 +718,38 @@ class ContainexJumpScene extends Phaser.Scene {
 
     const cactus = this.hazards.create(2855, 730, "cactus");
     cactus.body.setSize(52, 64).setOffset(6, 6);
+    this.containerCacti = [];
+
+    if (this.level >= 2) {
+      const cactusOffsets = [-0.28, 0.18, 0.31, -0.14];
+      let cactusIndex = 0;
+      this.containerPlatforms.forEach((platform, index) => {
+        if (index % 2 !== 0) {
+          return;
+        }
+
+        const cactusOffsetX = Phaser.Math.Clamp(
+          platform.width * cactusOffsets[cactusIndex % cactusOffsets.length],
+          -platform.width / 2 + 54,
+          platform.width / 2 - 54,
+        );
+        cactusIndex += 1;
+        const cactusOnContainer = this.hazards.create(
+          platform.centerX + cactusOffsetX,
+          getContainerContourTopY(platform, cactusOffsetX) - CONTAINER_CACTUS_SURFACE_OFFSET,
+          "cactus",
+        );
+        cactusOnContainer.setScale(0.82);
+        cactusOnContainer.body.setSize(42, 50).setOffset(11, 16);
+        cactusOnContainer.body.allowGravity = false;
+        cactusOnContainer.body.immovable = true;
+        cactusOnContainer.body.moves = false;
+        cactusOnContainer.containerPlatform = platform;
+        cactusOnContainer.containerOffsetX = cactusOffsetX;
+        cactusOnContainer.setDepth(12);
+        this.containerCacti.push(cactusOnContainer);
+      });
+    }
 
     this.snail = this.physics.add.sprite(4620, 545, "snail");
     this.snail.setCollideWorldBounds(true);
@@ -601,7 +818,16 @@ class ContainexJumpScene extends Phaser.Scene {
     this.player.setDragX(1500);
     this.player.setMaxVelocity(360, 1280);
     this.player.body.setSize(28, 46).setOffset(8, 2);
-    this.player.setDepth(20);
+    this.player.setVisible(false);
+
+    this.playerVisual = this.add.sprite(PLAYER_SPAWN_X, PLAYER_SPAWN_Y, "hero-idle");
+    this.playerVisual.setDepth(20);
+    this.playerVisualOffsetY = 0;
+    this.containerContactPlatform = null;
+    this.containerContactAt = -Infinity;
+    this.lastWalkSoundAt = -Infinity;
+    this.walkSoundStep = 0;
+    this.events.on(Phaser.Scenes.Events.POST_UPDATE, this.syncPlayerVisual, this);
 
     this.spawnPoint = new Phaser.Math.Vector2(PLAYER_SPAWN_X, PLAYER_SPAWN_Y);
     this.lastSafePosition = this.spawnPoint.clone();
@@ -641,11 +867,26 @@ class ContainexJumpScene extends Phaser.Scene {
       quantity: 10,
       frequency: -1,
     });
+    this.bonusBurst = this.add.particles(0, 0, "spark", {
+      speed: { min: 160, max: 430 },
+      angle: { min: 200, max: 340 },
+      gravityY: 420,
+      scale: { start: 1.3, end: 0 },
+      alpha: { start: 1, end: 0 },
+      tint: [0xfff18a, 0xff5fb5, 0x4bd7ff, 0xffffff],
+      lifespan: 880,
+      quantity: 28,
+      frequency: -1,
+    });
   }
 
   createCollisions() {
     this.physics.add.collider(this.player, this.platforms, () => this.rememberSafePosition());
-    this.physics.add.collider(this.player, this.movingPlatforms, () => this.rememberSafePosition());
+    this.physics.add.collider(this.player, this.movingPlatforms, (_player, platformCollider) => {
+      this.containerContactPlatform = platformCollider.containerPlatform ?? null;
+      this.containerContactAt = this.time.now;
+      this.rememberSafePosition();
+    });
     this.physics.add.collider(this.snail, this.platforms);
     this.physics.add.collider(this.snail, this.movingPlatforms);
     this.physics.add.collider(this.blueEnemy, this.platforms);
@@ -656,6 +897,7 @@ class ContainexJumpScene extends Phaser.Scene {
       this.addScore(50);
       this.coinsRemaining -= 1;
       this.coinBurst.emitParticleAt(coin.x, coin.y, 10);
+      soundEffects.play("coin");
       this.syncHud();
     });
 
@@ -665,6 +907,7 @@ class ContainexJumpScene extends Phaser.Scene {
       this.addScore(value);
       this.coinBurst.emitParticleAt(star.x, star.y, 22);
       this.showFloatingScore(star.x, star.y, `+${value}`);
+      soundEffects.play("star");
       this.syncHud();
     });
 
@@ -761,10 +1004,84 @@ class ContainexJumpScene extends Phaser.Scene {
     });
   }
 
+  showLevelBonus(timeBonus, totalBonus) {
+    const x = this.goalZone.x + 120;
+    const y = this.goalZone.y - 92;
+    const bonusLabel = this.add.text(x, y, `TIME BONUS\n+${timeBonus}`, {
+      fontFamily: "Arial Black",
+      fontSize: "34px",
+      align: "center",
+      color: "#fff3a3",
+      stroke: "#163f72",
+      strokeThickness: 6,
+    });
+    bonusLabel.setOrigin(0.5);
+    bonusLabel.setDepth(45);
+    bonusLabel.setScale(0.2);
+    bonusLabel.setAlpha(0);
+
+    const totalLabel = this.add.text(x, y + 72, `CLEAR +${totalBonus}`, {
+      fontFamily: "Arial Black",
+      fontSize: "24px",
+      align: "center",
+      color: "#ffffff",
+      stroke: "#9b2f69",
+      strokeThickness: 5,
+    });
+    totalLabel.setOrigin(0.5);
+    totalLabel.setDepth(45);
+    totalLabel.setAlpha(0);
+
+    this.bonusBurst.emitParticleAt(this.goalZone.x, this.goalZone.y - 40, 56);
+    this.tweens.add({
+      targets: bonusLabel,
+      scale: 1,
+      alpha: 1,
+      y: y - 18,
+      duration: 360,
+      ease: "Back.easeOut",
+    });
+    this.tweens.add({
+      targets: totalLabel,
+      alpha: 1,
+      y: y + 42,
+      duration: 260,
+      delay: 220,
+      ease: "Quad.easeOut",
+    });
+    this.tweens.add({
+      targets: [bonusLabel, totalLabel],
+      alpha: 0,
+      y: "-=38",
+      duration: 520,
+      delay: LEVEL_BONUS_FADE_DELAY_MS,
+      ease: "Quad.easeIn",
+      onComplete: () => {
+        bonusLabel.destroy();
+        totalLabel.destroy();
+      },
+    });
+  }
+
   startNextLevel() {
+    hideOverlay();
     runState.score = this.score;
     runState.lives = this.lives;
     runState.level = this.level + 1;
+    soundEffects.play("next");
+    this.scene.restart();
+  }
+
+  skipToNextLevel() {
+    if (this.isRespawning) {
+      return;
+    }
+
+    hideOverlay();
+    runState.score = this.score ?? runState.score;
+    runState.lives = Math.max(1, this.lives ?? runState.lives);
+    runState.level = (this.level ?? runState.level) + 1;
+    soundEffects.play("next");
     this.scene.restart();
   }
 
@@ -780,7 +1097,9 @@ class ContainexJumpScene extends Phaser.Scene {
 
     this.levelCompleted = true;
     this.isFrozen = true;
-    this.addScore(1000 + Math.max(0, this.timeLeft) * 5);
+    const timeBonus = Math.max(0, this.timeLeft) * TIME_BONUS_MULTIPLIER;
+    const totalBonus = LEVEL_CLEAR_POINTS + timeBonus;
+    this.addScore(totalBonus);
     this.syncHud();
     this.player.body.allowGravity = false;
     this.player.setVelocity(0, 0);
@@ -788,9 +1107,11 @@ class ContainexJumpScene extends Phaser.Scene {
     this.timerEvent.paused = true;
     this.snail.setVelocityX(0);
     this.blueEnemy.setVelocityX(0);
-    this.containerPlatforms.forEach(({ collider }) => collider.body.setVelocity(0, 0));
+    this.containerPlatforms.forEach((platform) => stopContainerPlatform(platform));
 
     this.openGoalDoor();
+    this.showLevelBonus(timeBonus, totalBonus);
+    soundEffects.play("levelClear");
     this.tweens.add({
       targets: this.player,
       x: this.goalZone.x,
@@ -801,12 +1122,14 @@ class ContainexJumpScene extends Phaser.Scene {
       ease: "Sine.easeIn",
       delay: 220,
       onComplete: () => {
-        showOverlay(
-          `LEVEL ${this.level}`,
-          "LEVEL CLEAR",
-          "You reached the open container. Continue to the next level with your score intact.",
-          "→",
-        );
+        this.time.delayedCall(LEVEL_BANNER_AFTER_BONUS_DELAY_MS, () => {
+          showOverlay(
+            `LEVEL ${this.level}`,
+            "LEVEL CLEAR",
+            `Time bonus: ${timeBonus}. Continue to the next level with your score intact.`,
+            "→",
+          );
+        });
       },
     });
   }
@@ -839,6 +1162,7 @@ class ContainexJumpScene extends Phaser.Scene {
       player.setVelocityY(-480);
       this.addScore(125);
       this.coinBurst.emitParticleAt(enemy.x, enemy.y, 12);
+      soundEffects.play("stomp");
       this.syncHud();
       return;
     }
@@ -870,6 +1194,11 @@ class ContainexJumpScene extends Phaser.Scene {
     this.goalContainer.setAlpha(1);
     this.invulnerableUntil = this.time.now + 1000;
     this.isRespawning = false;
+    this.playerVisualOffsetY = 0;
+    this.containerContactPlatform = null;
+    this.containerContactAt = -Infinity;
+    this.lastWalkSoundAt = -Infinity;
+    this.walkSoundStep = 0;
     this.syncHud();
   }
 
@@ -893,6 +1222,7 @@ class ContainexJumpScene extends Phaser.Scene {
     this.hearts = Math.max(0, this.lives);
     runState.lives = this.lives;
     this.syncHud();
+    soundEffects.play("hurt");
     this.cameras.main.shake(180, 0.006);
     this.player.body.allowGravity = false;
     this.player.setVelocity(0, 0);
@@ -934,7 +1264,7 @@ class ContainexJumpScene extends Phaser.Scene {
     this.timerEvent.paused = true;
     this.snail.setVelocityX(0);
     this.blueEnemy.setVelocityX(0);
-    this.containerPlatforms.forEach(({ collider }) => collider.body.setVelocity(0, 0));
+    this.containerPlatforms.forEach((platform) => stopContainerPlatform(platform));
     showOverlay("CONTAINEX JUMP", title, copy);
   }
 
@@ -974,7 +1304,20 @@ class ContainexJumpScene extends Phaser.Scene {
       const nextY = platform.baseY + Math.sin(time * platform.speed + platform.phase) * platform.range;
 
       platform.sprite.setY(nextY);
-      platform.collider.setY(nextY);
+      platform.currentY = nextY;
+      updateContainerSurfaceColliders(platform);
+    });
+
+    this.containerCacti?.forEach((cactus) => {
+      if (!cactus.active || !cactus.containerPlatform) {
+        return;
+      }
+
+      cactus.setPosition(
+        cactus.containerPlatform.centerX + cactus.containerOffsetX,
+        getContainerContourTopY(cactus.containerPlatform, cactus.containerOffsetX) - CONTAINER_CACTUS_SURFACE_OFFSET,
+      );
+      cactus.body.updateFromGameObject();
     });
   }
 
@@ -1099,6 +1442,7 @@ class ContainexJumpScene extends Phaser.Scene {
       this.coyoteTime = 0;
       this.jumpHoldTime = PLAYER_JUMP_HOLD_MS;
       this.dust.emitParticleAt(this.player.x, this.player.y + 26, 6);
+      soundEffects.play("jump");
     }
 
     if (jumpDown && this.jumpHoldTime > 0 && this.player.body.velocity.y < 0) {
@@ -1118,21 +1462,67 @@ class ContainexJumpScene extends Phaser.Scene {
       this.player.setVelocityY(PLAYER_SHORT_HOP_SPEED);
     }
 
-    if (onGround && Math.abs(this.player.body.velocity.x) > 12) {
+    const groundedForFrame = onGround;
+
+    if (groundedForFrame && Math.abs(this.player.body.velocity.x) > 12) {
       if (!this.wasGrounded) {
         this.dust.emitParticleAt(this.player.x, this.player.y + 24, 8);
       }
     }
-    this.wasGrounded = onGround;
+    this.wasGrounded = groundedForFrame;
 
     const absVelocityX = Math.abs(this.player.body.velocity.x);
-    if (!onGround) {
+    const isWalking = groundedForFrame && absVelocityX > 86;
+    if (isWalking && this.time.now - this.lastWalkSoundAt >= WALK_SOUND_INTERVAL_MS) {
+      soundEffects.play(this.walkSoundStep % 2 === 0 ? "walkA" : "walkB");
+      this.walkSoundStep += 1;
+      this.lastWalkSoundAt = this.time.now;
+    } else if (!isWalking) {
+      this.lastWalkSoundAt = this.time.now - WALK_SOUND_INTERVAL_MS * 0.55;
+    }
+
+    if (!groundedForFrame) {
       this.player.setTexture("hero-jump");
     } else if (absVelocityX > 70) {
       const frame = Math.floor(this.time.now / 120) % 2 === 0 ? "hero-run-a" : "hero-run-b";
       this.player.setTexture(frame);
     } else {
       this.player.setTexture("hero-idle");
+    }
+  }
+
+  syncPlayerVisual() {
+    if (!this.player?.active || !this.playerVisual) {
+      return;
+    }
+
+    const onGround = this.player.body.blocked.down || this.player.body.touching.down;
+    const targetOffsetY = getContainerVisualContourOffset(
+      this.containerContactPlatform,
+      this.player.x,
+      this.player.body.bottom,
+      onGround,
+      this.player.body.velocity.y,
+      this.time.now - this.containerContactAt,
+    );
+    const smoothing = targetOffsetY === 0 ? 0.32 : 0.42;
+    this.playerVisualOffsetY = Phaser.Math.Linear(this.playerVisualOffsetY, targetOffsetY, smoothing);
+    if (Math.abs(this.playerVisualOffsetY - targetOffsetY) < 0.25) {
+      this.playerVisualOffsetY = targetOffsetY;
+    }
+
+    this.playerVisual.setPosition(this.player.x, this.player.y + this.playerVisualOffsetY);
+    if (this.playerVisual.texture.key !== this.player.texture.key) {
+      this.playerVisual.setTexture(this.player.texture.key);
+    }
+    this.playerVisual.setFlipX(this.player.flipX);
+    this.playerVisual.setAlpha(this.player.alpha);
+    this.playerVisual.setScale(this.player.scaleX, this.player.scaleY);
+    this.playerVisual.setAngle(this.player.angle);
+    if (this.player.isTinted) {
+      this.playerVisual.setTint(this.player.tintTopLeft);
+    } else {
+      this.playerVisual.clearTint();
     }
   }
 }
@@ -1169,13 +1559,25 @@ function addPlatformBody(scene, group, x, y, width, height) {
   return body;
 }
 
-function createMovingContainerPlatform(scene, group, { x, y, width, height, range, speed, phase }) {
-  const sprite = drawContainexContainer(scene, { x, y, width, height });
+function createMovingContainerPlatform(scene, group, { x, y, width, height, range, speed, phase, textureKey }) {
+  const sprite = drawContainexContainer(scene, { x, y, width, height, textureKey });
+  const platform = {
+    sprite,
+    centerX: x + width / 2,
+    currentY: y + height / 2,
+    width,
+    height,
+    baseY: sprite.y,
+    range,
+    speed,
+    phase,
+    colliders: [],
+  };
   const collider = scene.add.rectangle(
-    x + width / 2,
-    y + height / 2,
+    platform.centerX,
+    getContainerSupportTopY(platform) + getContainerSupportBodyHeight(platform) / 2,
     width - 20,
-    height - 14,
+    getContainerSupportBodyHeight(platform),
     0xffffff,
     0,
   );
@@ -1186,16 +1588,69 @@ function createMovingContainerPlatform(scene, group, { x, y, width, height, rang
   collider.body.setImmovable(true);
   collider.body.setDirectControl(true);
   collider.body.updateFromGameObject();
+  collider.containerPlatform = platform;
   group.add(collider);
+  platform.colliders.push(collider);
 
-  return {
-    sprite,
-    collider,
-    baseY: sprite.y,
-    range,
-    speed,
-    phase,
-  };
+  return platform;
+}
+
+function updateContainerSurfaceColliders(platform) {
+  platform.colliders.forEach((collider) => {
+    collider.setPosition(
+      platform.centerX,
+      getContainerSupportTopY(platform) + getContainerSupportBodyHeight(platform) / 2,
+    );
+    collider.body.updateFromGameObject();
+  });
+}
+
+function stopContainerPlatform(platform) {
+  platform.colliders.forEach((collider) => collider.body.setVelocity(0, 0));
+}
+
+function getContainerVisualContourOffset(platform, playerX, _playerBottom, onGround, velocityY, contactAge) {
+  if (!platform || !onGround || velocityY < -20 || contactAge > CONTAINER_VISUAL_CONTACT_MS) {
+    return 0;
+  }
+
+  const localX = playerX - platform.centerX;
+  if (Math.abs(localX) > platform.width / 2 - 12) {
+    return 0;
+  }
+
+  return getContainerContourTopY(platform, localX) - getContainerSupportTopY(platform);
+}
+
+function getContainerContourTopY(platform, localX) {
+  return (
+    platform.currentY
+    - platform.height / 2
+    + CONTAINER_SURFACE_TOP_INSET
+    + getContainerContourOffset(localX, platform.width)
+  );
+}
+
+function getContainerSupportTopY(platform) {
+  return (
+    platform.currentY
+    - platform.height / 2
+    + CONTAINER_SURFACE_TOP_INSET
+    + CONTAINER_SUPPORT_TOP_OFFSET
+  );
+}
+
+function getContainerSupportBodyHeight(platform) {
+  return Math.max(40, platform.height - CONTAINER_SUPPORT_BODY_INSET);
+}
+
+function getContainerContourOffset(localX, width) {
+  const progress = Phaser.Math.Clamp(localX / width + 0.5, 0, 1);
+  const distanceFromCenter = Math.abs(progress - 0.5) * 2;
+  const sideDrop = Math.pow(distanceFromCenter, 1.35) * 18;
+  const centerCrown = -Math.sin(progress * Math.PI) * 10;
+  const panelRipple = Math.sin(progress * Math.PI * 6.4 + 0.4) * 2.5;
+  return Math.round(Phaser.Math.Clamp(sideDrop + centerCrown + panelRipple, -12, 22));
 }
 
 function getContainerHeight(width) {
@@ -1234,14 +1689,16 @@ function drawTerrainChunk(graphics, x, y, width, height) {
   }
 }
 
-function drawContainexContainer(scene, { x, y, width, height }) {
-  const sprite = scene.add.image(x + width / 2, y + height / 2, CONTAINER_TEXTURE_KEY);
+function drawContainexContainer(scene, { x, y, width, height, textureKey = CONTAINER_TEXTURE_KEY }) {
+  const sprite = scene.add.image(x + width / 2, y + height / 2, textureKey);
   sprite.setDisplaySize(width, height);
   sprite.setDepth(6);
   return sprite;
 }
 
 function createTextures(scene) {
+  createPinkContainerTexture(scene);
+
   if (scene.textures.exists("hero-idle")) {
     return;
   }
@@ -1259,6 +1716,47 @@ function createTextures(scene) {
   createPixelTexture(scene, "bird-b", 48, 36, (ctx) => drawBird(ctx, "down"));
   createPixelTexture(scene, "spark", 14, 14, drawSpark);
   createPixelTexture(scene, "flower", 40, 40, drawFlower);
+}
+
+function createPinkContainerTexture(scene) {
+  if (scene.textures.exists(PINK_CONTAINER_TEXTURE_KEY)) {
+    return;
+  }
+
+  const sourceImage = scene.textures.get(CONTAINER_TEXTURE_KEY).getSourceImage();
+  const texture = scene.textures.createCanvas(
+    PINK_CONTAINER_TEXTURE_KEY,
+    sourceImage.width,
+    sourceImage.height,
+  );
+  const ctx = texture.getContext();
+  ctx.drawImage(sourceImage, 0, 0);
+
+  const imageData = ctx.getImageData(0, 0, sourceImage.width, sourceImage.height);
+  const pixels = imageData.data;
+  for (let index = 0; index < pixels.length; index += 4) {
+    const red = pixels[index];
+    const green = pixels[index + 1];
+    const blue = pixels[index + 2];
+    const alpha = pixels[index + 3];
+    const isBlueContainerPixel =
+      alpha > 0 &&
+      blue > red + 18 &&
+      blue >= green - 12 &&
+      !(red > 170 && green > 125);
+
+    if (!isBlueContainerPixel) {
+      continue;
+    }
+
+    const shade = Math.max(red, green, blue) / 255;
+    pixels[index] = Math.round(168 + shade * 72);
+    pixels[index + 1] = Math.round(38 + shade * 58);
+    pixels[index + 2] = Math.round(112 + shade * 92);
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+  texture.refresh();
 }
 
 function createPixelTexture(scene, key, width, height, draw) {

@@ -103,7 +103,7 @@ button {
 
 .hero-status {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: clamp(4px, 1vmin, 10px);
   min-width: 0;
@@ -126,14 +126,36 @@ button {
   display: flex;
   gap: clamp(3px, 0.85vmin, 8px);
   flex-wrap: nowrap;
+  align-items: center;
+  overflow: visible;
+}
+
+.hud-lives-count {
+  display: none;
 }
 
 .heart {
-  width: clamp(13px, 2.8vmin, 28px);
-  aspect-ratio: 1;
+  width: clamp(16px, 3vmin, 32px);
+  aspect-ratio: 1.14;
   background: #4f5a75;
-  clip-path: path("M16 28C16 28 0 18.2 0 8.6C0 3.8 3.9 0 8.7 0C11.9 0 14.6 1.8 16 4.5C17.4 1.8 20.1 0 23.3 0C28.1 0 32 3.8 32 8.6C32 18.2 16 28 16 28Z");
-  transform: scale(0.9);
+  clip-path: polygon(
+    50% 94%,
+    9% 58%,
+    2% 45%,
+    0 29%,
+    6% 14%,
+    19% 4%,
+    34% 2%,
+    50% 19%,
+    66% 2%,
+    81% 4%,
+    94% 14%,
+    100% 29%,
+    98% 45%,
+    91% 58%
+  );
+  transform: none;
+  flex: 0 0 auto;
 }
 
 .heart.is-on {
